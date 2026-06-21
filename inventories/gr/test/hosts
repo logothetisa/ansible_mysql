@@ -1,0 +1,5 @@
+[mysql_servers]
+GRAZLXMySQL501 ansible_host=10.85.254.8
+GRAZPXMySQL501 ansible_host=10.85.254.9
+GRAZPXMySQL502 ansible_host=10.85.254.10
+GRAZPXMySQL503 ansible_host=10.85.254.11
