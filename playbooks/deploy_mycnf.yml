@@ -4,7 +4,7 @@
   become: true
   gather_facts: true   # needed for ansible_managed header + backup timestamp
 
-  # Required per-host / templated variables (ans_* prefix).
+  # Required per-host / templated variables (* prefix).
   # The template uses '| mandatory', so rendering stops if any is missing.
   #
   # Connection: SSH as 'ansible' (from ansible.cfg), sudo to root by default.
@@ -18,24 +18,24 @@
     - name: Validate that all required variables are explicitly set
       ansible.builtin.assert:
         that:
-          - ans_server_id is defined
-          - ans_report_host is defined
-          - ans_innodb_buffer_pool_size is defined
-          - ans_default_time_zone is defined
-          - ans_sql_generate_invisible_primary_key is defined
-          - ans_large_pages is defined
-          - ans_innodb_io_capacity is defined
-          - ans_innodb_io_capacity_max is defined
-          - ans_innodb_buffer_pool_instances is defined
-          - ans_innodb_log_buffer_size is defined
-          - ans_innodb_redo_log_capacity is defined
-          - ans_mysql_data_dir is defined
-          - ans_mysql_log_bin_dir is defined
-          - ans_mysql_relay_log_dir is defined
-          - ans_innodb_log_group_home_dir is defined
-          - ans_mysql_cnf_path is defined
-          - ans_mysql_cnf_backup_dir is defined
-          - ans_mycnf_template is defined
+          - server_id is defined
+          - report_host is defined
+          - innodb_buffer_pool_size is defined
+          - default_time_zone is defined
+          - sql_generate_invisible_primary_key is defined
+          - large_pages is defined
+          - innodb_io_capacity is defined
+          - innodb_io_capacity_max is defined
+          - innodb_buffer_pool_instances is defined
+          - innodb_log_buffer_size is defined
+          - innodb_redo_log_capacity is defined
+          - mysql_base is defined
+          - mysql_log_bin_dir is defined
+          - mysql_relay_log_dir is defined
+          - innodb_log_group_home_dir is defined
+          - mysql_cnf_path is defined
+          - mysql_cnf_backup_dir is defined
+          - mycnf_template is defined
         fail_msg: >-
           One or more required variables are not set for host
           '{{ inventory_hostname }}'. Check group_vars/all.yml and
@@ -48,7 +48,7 @@
     # -------------------------------------------------------------------------
     - name: Ensure backup directory exists
       ansible.builtin.file:
-        path: "{{ ans_mysql_cnf_backup_dir }}"
+        path: "{{ mysql_cnf_backup_dir }}"
         state: directory
         owner: mysql
         group: mysql
@@ -57,13 +57,13 @@
 
     - name: Check whether an existing my.cnf is present
       ansible.builtin.stat:
-        path: "{{ ans_mysql_cnf_path }}"
+        path: "{{ mysql_cnf_path }}"
       register: mycnf_stat
 
     - name: Backup existing my.cnf before overwriting
       ansible.builtin.copy:
-        src: "{{ ans_mysql_cnf_path }}"
-        dest: "{{ ans_mysql_cnf_backup_dir }}/my.cnf.{{ ansible_date_time.iso8601_basic_short }}.bak"
+        src: "{{ mysql_cnf_path }}"
+        dest: "{{ mysql_cnf_backup_dir }}/my.cnf.{{ ansible_date_time.iso8601_basic_short }}.bak"
         remote_src: true
         owner: mysql
         group: mysql
@@ -82,8 +82,8 @@
     # -------------------------------------------------------------------------
     - name: Deploy and validate my.cnf (only writes if valid)
       ansible.builtin.template:
-        src: "{{ playbook_dir }}/../templates/{{ ans_mycnf_template }}"
-        dest: "{{ ans_mysql_cnf_path }}"
+        src: "{{ playbook_dir }}/../templates/{{ mycnf_template }}"
+        dest: "{{ mysql_cnf_path }}"
         owner: mysql
         group: mysql
         mode: "0600"
@@ -95,7 +95,7 @@
     # -------------------------------------------------------------------------
     - name: Double-check the deployed my.cnf on disk
       ansible.builtin.command:
-        cmd: "mysqld --defaults-file={{ ans_mysql_cnf_path }} --validate-config"
+        cmd: "mysqld --defaults-file={{ mysql_cnf_path }} --validate-config"
       become_user: mysql
       register: mycnf_validate
       changed_when: false

@@ -1,0 +1,177 @@
+---
+- name: Install and configure MySQL 8.4.x Commercial (single playbook)
+  hosts: "{{ target | default('mysql_servers') }}"
+  become: true                 # escalate to root (default become_user) for all tasks
+  gather_facts: true
+
+  handlers:
+    - name: regenerate grub
+      ansible.builtin.command: grub2-mkconfig -o /etc/grub2.cfg
+
+    - name: daemon-reload
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: reboot required
+      ansible.builtin.debug:
+        msg: "SELinux change requires a reboot to take full effect."
+
+  tasks:
+    # =========================================================================
+    # STEP 1 — Install required OS packages
+    # =========================================================================
+    - name: Install required OS packages
+      ansible.builtin.yum:
+        name:
+          - jq
+          - screen
+          - lsof
+          - jemalloc
+          - mc
+          - dos2unix
+          - tree
+          - gzip
+          - zip
+          - unzip
+          - fio
+        state: present
+
+    # =========================================================================
+    # STEP 2 — Disable swappiness
+    # =========================================================================
+    - name: Set vm.swappiness=1
+      ansible.posix.sysctl:
+        name: vm.swappiness
+        value: "1"
+        state: present
+        sysctl_file: /etc/sysctl.conf
+        reload: true
+
+    # =========================================================================
+    # STEP 3 — Set user limits
+    # =========================================================================
+    - name: Configure security limits for mysql
+      community.general.pam_limits:
+        domain: mysql
+        limit_type: "{{ item.type }}"
+        limit_item: "{{ item.item }}"
+        value: "{{ item.value }}"
+      loop:
+        - { type: soft, item: nofile,  value: "1024000" }
+        - { type: hard, item: nofile,  value: "1024000" }
+        - { type: soft, item: nproc,   value: "10240" }
+        - { type: hard, item: nproc,   value: "10240" }
+        - { type: soft, item: memlock, value: unlimited }
+        - { type: hard, item: memlock, value: unlimited }
+
+    # =========================================================================
+    # STEP 4 — Disable Transparent Huge Pages (THP)
+    # =========================================================================
+    - name: Add transparent_hugepage=never to GRUB cmdline
+      ansible.builtin.lineinfile:
+        path: /etc/default/grub
+        regexp: '^GRUB_CMDLINE_LINUX="(.*)"$'
+        line: 'GRUB_CMDLINE_LINUX="\1 transparent_hugepage=never"'
+        backrefs: true
+      notify: regenerate grub
+
+    # =========================================================================
+    # STEP 5 — Disable SELinux and firewalld
+    # =========================================================================
+    - name: Disable SELinux
+      ansible.posix.selinux:
+        state: disabled
+      notify: reboot required
+
+    - name: Stop and disable firewalld
+      ansible.builtin.systemd:
+        name: firewalld
+        state: stopped
+        enabled: false
+      ignore_errors: true
+
+    # =========================================================================
+    # STEP 6 — mysql user/group, directory structure, sudoers
+    # =========================================================================
+    - name: Create mysql group
+      ansible.builtin.group:
+        name: "{{ mysql_group }}"
+        state: present
+
+    - name: Create mysql user
+      ansible.builtin.user:
+        name: "{{ mysql_user }}"
+        group: "{{ mysql_group }}"
+        home: "{{ mysql_home }}"
+        create_home: true
+        password: "{{ 'mysql' | password_hash('sha512') }}"
+
+    - name: Create MySQL directory structure
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ mysql_user }}"
+        group: "{{ mysql_group }}"
+        recurse: true
+      loop: "{{ mysql_directories }}"
+
+    - name: Configure sudoers for mysql systemctl operations
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/mysql
+        owner: root
+        group: root
+        mode: "0440"
+        validate: 'visudo -cf %s'
+        content: |
+          {% for action in ['start','stop','restart','reload','try-restart','status','enable','disable','is-active','is-enabled'] %}
+          mysql ALL=(root) NOPASSWD: /usr/bin/systemctl {{ action }} mysqld
+          {% endfor %}
+
+    # =========================================================================
+    # STEP 7 — Adjust mysqld.service resource limits
+    # =========================================================================
+    - name: Configure mysqld.service resource limits
+      ansible.builtin.lineinfile:
+        path: /lib/systemd/system/mysqld.service
+        insertafter: '^\[Service\]'
+        line: "{{ item }}"
+        state: present
+      loop:
+        - "LimitAS=infinity"
+        - "LimitRSS=infinity"
+        - "LimitCORE=infinity"
+        - "LimitNOFILE=1024000"
+        - "LimitMEMLOCK=infinity"
+      notify: daemon-reload
+
+    # =========================================================================
+    # STEP 8 — Enable jemalloc (version dependent)
+    # =========================================================================
+    - name: Enable jemalloc via LD_PRELOAD
+      ansible.builtin.lineinfile:
+        path: /etc/sysconfig/mysql
+        line: "LD_PRELOAD={{ jemalloc_lib_rhel8 if ansible_distribution_major_version | int >= 8 else jemalloc_lib_rhel7 }}"
+        create: true
+        owner: root
+        group: root
+        mode: "0644"
+      notify: daemon-reload
+
+    # =========================================================================
+    # STEP 9 — Install keyring component for TDE encryption
+    # =========================================================================
+    - name: Create manifest file mysqld.my
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/{{ mysqld_my_template }}"
+        dest: "{{ keyring_manifest_path }}"
+        owner: root
+        group: mysql
+        mode: "0640"
+
+    - name: Create keyring component config
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/{{ component_keyring_encrypted_file_template }}"
+        dest: "{{ keyring_component_path }}"
+        owner: root
+        group: mysql
+        mode: "0640"

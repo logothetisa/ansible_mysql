@@ -14,18 +14,18 @@
 
     - name: Check that my.cnf exists
       ansible.builtin.stat:
-        path: "{{ ans_mysql_cnf_path }}"
+        path: "{{ mysql_cnf_path }}"
       register: mycnf_stat
 
     - name: Fail if my.cnf is missing
       ansible.builtin.fail:
-        msg: "{{ ans_mysql_cnf_path }} does not exist."
+        msg: "{{ mysql_cnf_path }} does not exist."
       when: not mycnf_stat.stat.exists
 
   tasks:
     - name: Ensure backup directory exists
       ansible.builtin.file:
-        path: "{{ ans_mysql_cnf_backup_dir }}"
+        path: "{{ mysql_cnf_backup_dir }}"
         state: directory
         owner: mysql
         group: mysql
@@ -34,8 +34,8 @@
 
     - name: Backup current my.cnf before modification
       ansible.builtin.copy:
-        src: "{{ ans_mysql_cnf_path }}"
-        dest: "{{ ans_mysql_cnf_backup_dir }}/my.cnf.{{ ansible_date_time.iso8601_basic_short }}.bak"
+        src: "{{ mysql_cnf_path }}"
+        dest: "{{ mysql_cnf_backup_dir }}/my.cnf.{{ ansible_date_time.iso8601_basic_short }}.bak"
         remote_src: true
         owner: mysql
         group: mysql
@@ -44,52 +44,52 @@
     # ---------- PRESENT: uncomment, then add/update ----------
     - name: "PRESENT - uncomment if commented"
       ansible.builtin.replace:
-        path: "{{ ans_mysql_cnf_path }}"
+        path: "{{ mysql_cnf_path }}"
         regexp: '^(\s*)#\s*({{ item.name | regex_escape }}\s*=.*)$'
         replace: '\1\2'
       loop: "{{ mysql_params | selectattr('state','undefined') | list
-                + mysql_params | selectattr('state','defined') | selectattr('state','==','present') | list }}"
+                + mysql_params | selectattr('state','defined') | selectattr('state', 'match', 'present') | list }}"
       loop_control:
         label: "{{ item.name }}"
 
     - name: "PRESENT - add or update (after [mysqld])"
       ansible.builtin.lineinfile:
-        path: "{{ ans_mysql_cnf_path }}"
+        path: "{{ mysql_cnf_path }}"
         regexp: '^\s*{{ item.name | regex_escape }}\s*=.*$'
         line: "{{ item.name }}={{ item.value }}"
-        insertafter: '^\[{{ ans_mysql_section }}\]'
+        insertafter: '^\[{{ mysql_section }}\]'
         owner: mysql
         group: mysql
         mode: "0600"
       loop: "{{ mysql_params | selectattr('state','undefined') | list
-                + mysql_params | selectattr('state','defined') | selectattr('state','==','present') | list }}"
+                + mysql_params | selectattr('state','defined') | selectattr('state','match','present') | list }}"
       loop_control:
         label: "{{ item.name }} = {{ item.value | default('') }}"
 
     # ---------- DISABLED: comment out ----------
     - name: "DISABLED - comment out active line"
       ansible.builtin.replace:
-        path: "{{ ans_mysql_cnf_path }}"
+        path: "{{ mysql_cnf_path }}"
         regexp: '^(\s*)(?!#)({{ item.name | regex_escape }}\s*=.*)$'
         replace: '\1#\2'
-      loop: "{{ mysql_params | selectattr('state','defined') | selectattr('state','==','disabled') | list }}"
+      loop: "{{ mysql_params | selectattr('state','defined') | selectattr('state','match','disabled') | list }}"
       loop_control:
         label: "{{ item.name }}"
 
     # ---------- ABSENT: remove the line entirely  (THIS WAS MISSING) ----------
     - name: "ABSENT - remove parameter line"
       ansible.builtin.lineinfile:
-        path: "{{ ans_mysql_cnf_path }}"
+        path: "{{ mysql_cnf_path }}"
         regexp: '^\s*#?\s*{{ item.name | regex_escape }}\s*=.*$'
         state: absent
-      loop: "{{ mysql_params | selectattr('state','defined') | selectattr('state','==','absent') | list }}"
+      loop: "{{ mysql_params | selectattr('state','defined') | selectattr('state','match','absent') | list }}"
       loop_control:
         label: "{{ item.name }}"
 
     # ---------- VALIDATE ----------
     - name: Validate my.cnf after changes
       ansible.builtin.command:
-        cmd: "mysqld --defaults-file={{ ans_mysql_cnf_path }} --validate-config"
+        cmd: "mysqld --defaults-file={{ mysql_cnf_path }} --validate-config"
       become_user: mysql
       register: mycnf_validate
       changed_when: false

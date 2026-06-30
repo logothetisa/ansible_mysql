@@ -1,0 +1,2 @@
+[mysql_servers]
+hrhlpaminnodb403 ansible_host=10.109.38.33

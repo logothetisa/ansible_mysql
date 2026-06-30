@@ -21,11 +21,11 @@ collation-server = utf8mb4_0900_ai_ci
 # Variables that need values   (templated per-host by Ansible)
 #
 #------------------------------------------------------------
-server_id={{ ans_server_id | mandatory }}
-report_host={{ ans_report_host | mandatory }}
-innodb_buffer_pool_size={{ ans_innodb_buffer_pool_size | mandatory }}
-default_time_zone = {{ ans_default_time_zone | mandatory }}
-sql_generate_invisible_primary_key = {{ ans_sql_generate_invisible_primary_key | mandatory }}
+server_id={{ server_id | mandatory }}
+report_host={{ report_host | mandatory }}
+innodb_buffer_pool_size={{ innodb_buffer_pool_size | mandatory }}
+default_time_zone = {{ default_time_zone | mandatory }}
+sql_generate_invisible_primary_key = {{ sql_generate_invisible_primary_key | mandatory }}
 #mysql_native_password=ON
 
 
@@ -63,21 +63,21 @@ sql_generate_invisible_primary_key = {{ ans_sql_generate_invisible_primary_key |
 #
 #----------------------------------------------------------------------
 
-datadir                         = {{ ans_mysql_data_dir       | mandatory }}/data/db
-socket                          = {{ ans_mysql_data_dir       | mandatory }}/data/db/mysql.sock
-log_error                       = {{ ans_mysql_data_dir       | mandatory }}/log/error_log/mysql_error.log
-pid_file                        = {{ ans_mysql_data_dir       | mandatory }}/log/mysql.pid
-general_log_file                = {{ ans_mysql_data_dir       | mandatory }}/log/general_log/general.log
-slow_query_log_file             = {{ ans_mysql_data_dir       | mandatory }}/log/slow_log/slow_query.log
-tmpdir                          = {{ ans_mysql_data_dir       | mandatory }}/log/tmp
+datadir                         = {{ mysql_base       | mandatory }}/data/db
+socket                          = {{ mysql_base       | mandatory }}/data/db/mysql.sock
+log_error                       = {{ mysql_base       | mandatory }}/log/error_log/mysql_error.log
+pid_file                        = {{ mysql_base       | mandatory }}/log/mysql.pid
+general_log_file                = {{ mysql_base       | mandatory }}/log/general_log/general.log
+slow_query_log_file             = {{ mysql_base       | mandatory }}/log/slow_log/slow_query.log
+tmpdir                          = {{ mysql_base       | mandatory }}/log/tmp
 
-log_bin                         = {{ ans_mysql_log_bin_dir    | mandatory }}/binlog.log
-log_bin_index                   = {{ ans_mysql_log_bin_dir    | mandatory }}/binlog.index
+log_bin                         = {{ mysql_log_bin_dir    | mandatory }}/binlog.log
+log_bin_index                   = {{ mysql_log_bin_dir    | mandatory }}/binlog.index
 
-relay_log                       = {{ ans_mysql_relay_log_dir  | mandatory }}/relaylog.log
-relay_log_index                 = {{ ans_mysql_relay_log_dir  | mandatory }}/relaylog.index
+relay_log                       = {{ mysql_relay_log_dir  | mandatory }}/relaylog.log
+relay_log_index                 = {{ mysql_relay_log_dir  | mandatory }}/relaylog.index
 
-innodb_log_group_home_dir       = {{ ans_innodb_log_group_home_dir | mandatory }}
+innodb_log_group_home_dir       = {{ innodb_log_group_home_dir | mandatory }}
 
 #----------------------------------------------------------------------
 
@@ -187,7 +187,7 @@ super_read_only=1
 # InnoDB Configuration
 #
 #----------------------------------------------------------------------
-large_pages={{ ans_large_pages | mandatory }} 
+large_pages={{ large_pages | mandatory }} 
 innodb_numa_interleave=ON   ## ON -> default 8.4 LTS
 
 # The maximum depth of search performed by the query optimizer.
@@ -197,12 +197,12 @@ optimizer_search_depth = 0
 innodb_file_per_table = ON
 innodb_flush_method=O_DIRECT  ## O_DIRECT -> default 8.4 LTS
 
-innodb_log_buffer_size={{ ans_innodb_log_buffer_size | mandatory }}   ## 64M -> default 8.4 LTS
-innodb_redo_log_capacity={{ ans_innodb_redo_log_capacity | mandatory }}
+innodb_log_buffer_size={{ innodb_log_buffer_size | mandatory }}   ## 64M -> default 8.4 LTS
+innodb_redo_log_capacity={{ innodb_redo_log_capacity | mandatory }}
 
-innodb_buffer_pool_instances={{ ans_innodb_buffer_pool_instances | mandatory }}
-innodb_io_capacity={{ ans_innodb_io_capacity | mandatory }}     ## 10000 -> default 8.4. LTS
-innodb_io_capacity_max={{ ans_innodb_io_capacity_max | mandatory }} ## 2 * innodb_io_capacity  -> default 8.4. LTS
+innodb_buffer_pool_instances={{ innodb_buffer_pool_instances | mandatory }}
+innodb_io_capacity={{ innodb_io_capacity | mandatory }}     ## 10000 -> default 8.4. LTS
+innodb_io_capacity_max={{ innodb_io_capacity_max | mandatory }} ## 2 * innodb_io_capacity  -> default 8.4. LTS
 
 #innodb_buffer_pool_chunk_size=256M
 #innodb_write_io_threads=8
@@ -232,8 +232,8 @@ table_open_cache=4000
 
 
 [mysqld_safe]
-log_error = {{ ans_mysql_data_dir | mandatory }}/log/error_log/mysql_error.log
-pid_file  = {{ ans_mysql_data_dir | mandatory }}/log/mysql.pid
+log_error = {{ mysql_base | mandatory }}/log/error_log/mysql_error.log
+pid_file  = {{ mysql_base | mandatory }}/log/mysql.pid
 
 #
 # include all files from the config directory
@@ -241,4 +241,4 @@ pid_file  = {{ ans_mysql_data_dir | mandatory }}/log/mysql.pid
 # !includedir /etc/my.cnf.d
 
 [client]
-socket = {{ ans_mysql_data_dir | mandatory }}/data/db/mysql.sock
+socket = {{ mysql_base | mandatory }}/data/db/mysql.sock

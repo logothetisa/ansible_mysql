@@ -1,2 +1,2 @@
-ans_server_id: 2
-ans_report_host: "ansible02"
+server_id: 2
+report_host: "ansible02"

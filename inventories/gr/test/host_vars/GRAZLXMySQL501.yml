@@ -1,2 +1,7 @@
-ans_server_id: 1
-ans_report_host: "ansible01"
+server_id: 1
+report_host: "ansible01"
+
+mysql_log_bin_dir: "/u01/mysql/data/binlog"
+mysql_relay_log_dir: "/u01/mysql/data/relaylog"
+innodb_log_group_home_dir: "/u01/mysql/data/redo"
+
