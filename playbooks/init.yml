@@ -1,0 +1,108 @@
+---
+- name: Revert MySQL 8.4.x Commercial installation/configuration
+  hosts: "{{ target | default('mysql_servers') }}"
+  become: true
+  gather_facts: true
+
+  handlers:
+    - name: regenerate grub
+      ansible.builtin.command: grub2-mkconfig -o /etc/grub2.cfg
+
+    - name: daemon-reload
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+  tasks:
+    # =========================================================================
+    # REVERT STEP 9 — Remove keyring component for TDE encryption
+    # =========================================================================
+    - name: Remove keyring component config
+      ansible.builtin.file:
+        path: "{{ keyring_component_path }}"
+        state: absent
+
+    - name: Remove manifest file mysqld.my
+      ansible.builtin.file:
+        path: "{{ keyring_manifest_path }}"
+        state: absent
+
+    # =========================================================================
+    # REVERT STEP 8 — Disable jemalloc (remove LD_PRELOAD)
+    # =========================================================================
+    - name: Remove jemalloc LD_PRELOAD line
+      ansible.builtin.lineinfile:
+        path: /etc/sysconfig/mysql
+        regexp: '^LD_PRELOAD='
+        state: absent
+      notify: daemon-reload
+
+    # =========================================================================
+    # REVERT STEP 7 — Remove mysqld.service resource limits
+    # =========================================================================
+    - name: Remove mysqld.service resource limits
+      ansible.builtin.lineinfile:
+        path: /lib/systemd/system/mysqld.service
+        line: "{{ item }}"
+        state: absent
+      loop:
+        - "LimitAS=infinity"
+        - "LimitRSS=infinity"
+        - "LimitCORE=infinity"
+        - "LimitNOFILE=1024000"
+        - "LimitMEMLOCK=infinity"
+      notify: daemon-reload
+
+    # =========================================================================
+    # REVERT STEP 6 — Remove sudoers, directory structure, user/group
+    # =========================================================================
+    - name: Remove sudoers file for mysql
+      ansible.builtin.file:
+        path: /etc/sudoers.d/mysql
+        state: absent
+
+    - name: Remove MySQL directory structure
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop: "{{ mysql_directories }}"
+
+    - name: Remove mysql user (and home directory)
+      ansible.builtin.user:
+        name: "{{ mysql_user }}"
+        state: absent
+        remove: true
+      ignore_errors: true
+
+    - name: Remove mysql group
+      ansible.builtin.group:
+        name: "{{ mysql_group }}"
+        state: absent
+      ignore_errors: true
+
+    # =========================================================================
+    # REVERT STEP 4 — Re-enable Transparent Huge Pages (remove kernel param)
+    # =========================================================================
+    - name: Remove transparent_hugepage=never from GRUB cmdline
+      ansible.builtin.replace:
+        path: /etc/default/grub
+        regexp: '\s*transparent_hugepage=never'
+        replace: ''
+      notify: regenerate grub
+
+    # =========================================================================
+    # REVERT STEP 3 — Remove security limits for mysql
+    # =========================================================================
+    - name: Remove security limits for mysql
+      community.general.pam_limits:
+        domain: mysql
+        limit_type: "{{ item.type }}"
+        limit_item: "{{ item.item }}"
+        value: "{{ item.value }}"
+        state: absent
+      loop:
+        - { type: soft, item: nofile,  value: "1024000" }
+        - { type: hard, item: nofile,  value: "1024000" }
+        - { type: soft, item: nproc,   value: "10240" }
+        - { type: hard, item: nproc,   value: "10240" }
+        - { type: soft, item: memlock, value: unlimited }
+        - { type: hard, item: memlock, value: unlimited }

@@ -1,0 +1,56 @@
+---
+# --- mysql_ prefixed (fixed/global) ---
+mysql_cnf_path: "/opt/mysql/ansible/etc/my.cnf"
+mysql_cnf_backup_dir: "/opt/mysql/ansible/mysql_backup"
+mysql_section: "mysqld"
+
+mycnf_template: "my.cnf-8.4.j2"
+mysqld_my_template: "mysqld.my.j2"
+component_keyring_encrypted_file_template: "component_keyring_encrypted_file.cnf.j2"
+
+mysql_user: mysql
+mysql_group: mysql
+mysql_home: /home/mysql
+
+# RHEL major version drives jemalloc path
+jemalloc_lib_rhel7: /usr/lib64/libjemalloc.so.1
+jemalloc_lib_rhel8: /usr/lib64/libjemalloc.so.2
+
+# Keyring (move these to Ansible Vault!)
+keyring_password: "ashk2pods8y2rho20fa"
+keyring_manifest_path: "/usr/sbin/mysqld.my"
+keyring_component_path: "/usr/lib64/mysql/plugin/component_keyring_encrypted_file.cnf"
+keyring_path: "{{ mysql_base }}/keyring/component_keyring_encrypted_file"
+
+
+mysql_base: /opt/mysql
+mysql_log_bin_dir: "{{ mysql_base }}/data/binlog"
+mysql_relay_log_dir: "{{ mysql_base }}/data/relaylog"
+innodb_log_group_home_dir: "{{ mysql_base }}/data/db"
+
+mysql_directories:
+  - "{{ mysql_base }}/sw"
+  - "{{ mysql_base }}/audit"
+  - "{{ mysql_base }}/keyring"
+  - "{{ mysql_base }}/backup/meb"
+  - "{{ mysql_base }}/data/db"
+  - "{{ mysql_base }}/data/binlog"
+  - "{{ mysql_base }}/data/relaylog"
+  - "{{ mysql_base }}/log/error_log"
+  - "{{ mysql_base }}/log/general_log"
+  - "{{ mysql_base }}/log/slow_log"
+  - "{{ mysql_base }}/log/tmp"
+
+os_packages:
+  - jq
+  - screen
+  - lsof
+  - jemalloc
+  - mc
+  - dos2unix
+  - tree
+  - gzip
+  - zip
+  - unzip
+  - fio
+  - innotop

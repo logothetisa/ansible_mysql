@@ -1,0 +1,2 @@
+[mysql_servers]
+dbatestdb ansible_host=10.96.101.60 
