@@ -1,0 +1,17 @@
+---
+- name: regenerate grub
+  ansible.builtin.command: grub2-mkconfig -o /etc/grub2.cfg
+
+- name: daemon-reload
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: reboot required
+  ansible.builtin.debug:
+    msg: "Changes requires a reboot to take full effect."
+
+- name: restart mysqld
+  ansible.builtin.systemd:
+    name: mysqld
+    state: restarted
+

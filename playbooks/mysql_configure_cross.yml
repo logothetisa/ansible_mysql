@@ -4,23 +4,14 @@
   become: true                 # escalate to root (default become_user) for all tasks
   gather_facts: true
 
-  handlers:
-    - name: regenerate grub
-      ansible.builtin.command: grub2-mkconfig -o /etc/grub2.cfg
-
-    - name: daemon-reload
-      ansible.builtin.systemd:
-        daemon_reload: true
-
-    - name: reboot required
-      ansible.builtin.debug:
-        msg: "SELinux change requires a reboot to take full effect."
+  roles: 
+    - common
 
   pre_tasks:
     # =========================================================================
     # STEP 0 — Verify supported OS and version (fail fast otherwise)
     # =========================================================================
-    - name: Verify OS is RedHat/CentOS/Oracle Linux (or compatible) and version > 7
+    - name: Verify OS is RedHat/CentOS/Oracle Linux (or compatible) and version >= 7
       ansible.builtin.assert:
         that:
           - ansible_os_family == "RedHat"
@@ -81,7 +72,9 @@
         regexp: '^GRUB_CMDLINE_LINUX="(?!.*transparent_hugepage=never)(.*)"$'
         line: 'GRUB_CMDLINE_LINUX="\1 transparent_hugepage=never"'
         backrefs: true
-      notify: regenerate grub
+      notify: 
+         - regenerate grub
+         - reboot required
 
     # =========================================================================
     # STEP 5 — Disable SELinux and firewalld
