@@ -1,6 +1,6 @@
 ---
 - name: Manage parameters in my.cnf (add / modify / disable / remove)
-  hosts: "{{ target | default('mysql_servers') }}"
+  hosts: "{{ target }}"
   become: true
   gather_facts: true
 

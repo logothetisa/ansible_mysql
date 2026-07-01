@@ -1,6 +1,6 @@
 ---
 # --- mysql_ prefixed (fixed/global) ---
-mysql_cnf_path: "/opt/mysql/ansible/etc/my.cnf"
+mysql_cnf_path: "/etc/my.cnf"
 mysql_cnf_backup_dir: "/opt/mysql/ansible/mysql_backup"
 mysql_section: "mysqld"
 

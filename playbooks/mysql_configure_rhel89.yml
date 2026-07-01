@@ -1,20 +1,29 @@
 ---
 - name: Install and configure MySQL 8.4.x Commercial (single playbook)
-  hosts: "{{ target | default('mysql_servers') }}"
+  hosts: "{{ target }}"
   become: true                 # escalate to root (default become_user) for all tasks
   gather_facts: true
 
-  handlers:
-    - name: regenerate grub
-      ansible.builtin.command: grub2-mkconfig -o /etc/grub2.cfg
+  roles:
+    - common
 
-    - name: daemon-reload
-      ansible.builtin.systemd:
-        daemon_reload: true
-
-    - name: reboot required
-      ansible.builtin.debug:
-        msg: "SELinux change requires a reboot to take full effect."
+  pre_tasks:
+    # =========================================================================
+    # STEP 0 — Verify supported OS and version (fail fast otherwise)
+    # =========================================================================
+    - name: Verify OS is RedHat/CentOS/Oracle Linux (or compatible) and version > 7
+      ansible.builtin.assert:
+        that:
+          - ansible_os_family == "RedHat"
+          - ansible_distribution_major_version | int > 7
+        fail_msg: >-
+          UNSUPPORTED OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          (family: {{ ansible_os_family }}). This playbook requires a RedHat-compatible
+          distribution (RHEL, CentOS, Rocky, AlmaLinux, Oracle Linux) with major
+          version greater than 7. Aborting.
+        success_msg: >-
+          Supported OS detected: {{ ansible_distribution }}
+          {{ ansible_distribution_major_version }} ({{ ansible_os_family }}).
 
   tasks:
     # =========================================================================
@@ -22,18 +31,7 @@
     # =========================================================================
     - name: Install required OS packages
       ansible.builtin.yum:
-        name:
-          - jq
-          - screen
-          - lsof
-          - jemalloc
-          - mc
-          - dos2unix
-          - tree
-          - gzip
-          - zip
-          - unzip
-          - fio
+        name: "{{ os_packages }}"
         state: present
 
     # =========================================================================
@@ -70,10 +68,13 @@
     - name: Add transparent_hugepage=never to GRUB cmdline
       ansible.builtin.lineinfile:
         path: /etc/default/grub
-        regexp: '^GRUB_CMDLINE_LINUX="(.*)"$'
+        # Match the GRUB_CMDLINE_LINUX line that does NOT already contain the flag
+        regexp: '^GRUB_CMDLINE_LINUX="(?!.*transparent_hugepage=never)(.*)"$'
         line: 'GRUB_CMDLINE_LINUX="\1 transparent_hugepage=never"'
         backrefs: true
-      notify: regenerate grub
+      notify:
+         - regenerate grub
+         - reboot required
 
     # =========================================================================
     # STEP 5 — Disable SELinux and firewalld
@@ -105,6 +106,7 @@
         home: "{{ mysql_home }}"
         create_home: true
         password: "{{ 'mysql' | password_hash('sha512') }}"
+        update_password: on_create     # ← only sets password when user is first created
 
     - name: Create MySQL directory structure
       ansible.builtin.file:

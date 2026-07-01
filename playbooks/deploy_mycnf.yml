@@ -1,6 +1,6 @@
 ---
 - name: Deploy my.cnf template to MySQL server(s)
-  hosts: "{{ target | default('mysql_servers') }}"
+  hosts: "{{ target }}"
   become: true
   gather_facts: true   # needed for ansible_managed header + backup timestamp
 

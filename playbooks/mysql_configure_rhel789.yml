@@ -1,6 +1,6 @@
 ---
 - name: Install and configure MySQL 8.4.x Commercial
-  hosts: "{{ target | default('mysql_servers') }}"
+  hosts: "{{ target }}"
   become: true                 # escalate to root (default become_user) for all tasks
   gather_facts: true
 

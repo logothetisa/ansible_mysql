@@ -1,6 +1,6 @@
 ---
 - name: Revert MySQL 8.4.x Commercial installation/configuration
-  hosts: "{{ target | default('mysql_servers') }}"
+  hosts: "{{ target }}"
   become: true
   gather_facts: true
 
