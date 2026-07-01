@@ -65,6 +65,7 @@ sql_generate_invisible_primary_key = {{ sql_generate_invisible_primary_key | man
 
 datadir                         = {{ mysql_base       | mandatory }}/data/db
 socket                          = {{ mysql_base       | mandatory }}/data/db/mysql.sock
+mysqlx_socket                   = {{ mysql_base       | mandatory }}/data/db/mysqlx.sock
 log_error                       = {{ mysql_base       | mandatory }}/log/error_log/mysql_error.log
 pid_file                        = {{ mysql_base       | mandatory }}/log/mysql.pid
 general_log_file                = {{ mysql_base       | mandatory }}/log/general_log/general.log

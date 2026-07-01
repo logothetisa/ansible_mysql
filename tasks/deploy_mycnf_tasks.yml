@@ -1,0 +1,95 @@
+---
+    - name: Validate that all required variables are explicitly set
+      ansible.builtin.assert:
+        that:
+          - server_id is defined
+          - report_host is defined
+          - innodb_buffer_pool_size is defined
+          - default_time_zone is defined
+          - sql_generate_invisible_primary_key is defined
+          - large_pages is defined
+          - innodb_io_capacity is defined
+          - innodb_io_capacity_max is defined
+          - innodb_buffer_pool_instances is defined
+          - innodb_log_buffer_size is defined
+          - innodb_redo_log_capacity is defined
+          - mysql_base is defined
+          - mysql_log_bin_dir is defined
+          - mysql_relay_log_dir is defined
+          - innodb_log_group_home_dir is defined
+          - mysql_cnf_path is defined
+          - mysql_cnf_backup_dir is defined
+          - mycnf_template is defined
+        fail_msg: >-
+          One or more required variables are not set for host
+          '{{ inventory_hostname }}'. Check group_vars/all.yml and
+          host_vars/{{ inventory_hostname }}.yml.
+        success_msg: "All required variables are set for {{ inventory_hostname }}."
+
+    # -------------------------------------------------------------------------
+    # BACKUP FIRST  (runs as root — owns /etc and the backup dir)
+    # -------------------------------------------------------------------------
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ mysql_cnf_backup_dir }}"
+        state: directory
+        owner: mysql
+        group: mysql
+        mode: "0700"
+      check_mode: false   # actually create it so dry-runs validate later tasks
+
+    - name: Check whether an existing my.cnf is present
+      ansible.builtin.stat:
+        path: "{{ mysql_cnf_path }}"
+      register: mycnf_stat
+
+    - name: Backup existing my.cnf before overwriting
+      ansible.builtin.copy:
+        src: "{{ mysql_cnf_path }}"
+        dest: "{{ mysql_cnf_backup_dir }}/my.cnf.{{ ansible_date_time.iso8601_basic_short }}.bak"
+        remote_src: true
+        owner: mysql
+        group: mysql
+        mode: "0600"
+      when: mycnf_stat.stat.exists
+      register: mycnf_backup
+
+    - name: Show backup location
+      ansible.builtin.debug:
+        msg: "Existing my.cnf backed up at {{ mycnf_backup.dest }}"
+      when: mycnf_stat.stat.exists
+
+    # -------------------------------------------------------------------------
+    # DEPLOY + VALIDATE  (root writes the file; validate happens BEFORE the
+    # file is written — if invalid, the existing my.cnf is left untouched)
+    # -------------------------------------------------------------------------
+    - name: Deploy and validate my.cnf (only writes if valid)
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/{{ mycnf_template }}"
+        dest: "{{ mysql_cnf_path }}"
+        owner: mysql
+        group: mysql
+        mode: "0600"
+        validate: "mysqld --defaults-file=%s --validate-config --user=mysql"
+      # become_user not set -> root (must write the destination)
+
+    # -------------------------------------------------------------------------
+    # DOUBLE-CHECK ON DISK  (runs as the 'mysql' user — cleanest for mysqld)
+    # -------------------------------------------------------------------------
+    - name: Double-check the deployed my.cnf on disk
+      ansible.builtin.command:
+        cmd: "mysqld --defaults-file={{ mysql_cnf_path }} --validate-config"
+      become_user: mysql
+      register: mycnf_validate
+      changed_when: false
+      failed_when: mycnf_validate.rc != 0
+
+    - name: Confirm validation passed
+      ansible.builtin.debug:
+        msg: >-
+          ✅ my.cnf is valid on {{ inventory_hostname }}.
+          Restart mysqld manually during a controlled maintenance window
+          for non-dynamic settings to take effect.
+
+  # NO handlers block — mysqld is never restarted by this playbook.
+

@@ -177,3 +177,6 @@
         owner: root
         group: mysql
         mode: "0640"
+
+    - name: Deploy new my.cnf
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/deploy_mycnf_tasks.yml"

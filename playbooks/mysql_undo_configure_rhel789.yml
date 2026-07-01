@@ -1,0 +1,156 @@
+---
+- name: Undo MySQL 8.4.x Commercial configuration (keeps /opt/mysql base dir)
+  hosts: "{{ target }}"
+  become: true
+  gather_facts: true
+
+  roles:
+    - common
+
+  pre_tasks:
+    # =========================================================================
+    # STEP 0 — Verify supported OS and version (same guard as configure)
+    # =========================================================================
+    - name: Verify OS is RedHat/CentOS/Oracle Linux (or compatible) and version >= 7
+      ansible.builtin.assert:
+        that:
+          - ansible_os_family == "RedHat"
+          - ansible_distribution_major_version | int >= 7
+        fail_msg: >-
+          UNSUPPORTED OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          (family: {{ ansible_os_family }}). This playbook requires a RedHat-compatible
+          distribution with major version >= 7. Aborting.
+        success_msg: >-
+          Supported OS detected: {{ ansible_distribution }}
+          {{ ansible_distribution_major_version }} ({{ ansible_os_family }}).
+
+    # =========================================================================
+    # PRECHECK — Abort if mysqld service is running (guaranteed check)
+    # =========================================================================
+    - name: Gather service facts
+      ansible.builtin.service_facts:
+      check_mode: false          # always run, even in --check
+
+    - name: Abort if mysqld is running
+      ansible.builtin.assert:
+        that:
+          - >-
+            ansible_facts.services['mysqld.service'] is not defined
+            or ansible_facts.services['mysqld.service'].state != 'running'
+        fail_msg: >-
+          ABORTING: the mysqld service is currently RUNNING on {{ inventory_hostname }}.
+          Stop mysqld before running this undo playbook
+          (e.g. 'sudo systemctl stop mysqld').
+        success_msg: "mysqld is not running — safe to proceed with undo."
+
+  tasks:
+    # =========================================================================
+    # UNDO STEP 9 — Remove keyring component files (manifest + config)
+    # =========================================================================
+    - name: Remove keyring component config
+      ansible.builtin.file:
+        path: /usr/lib64/mysql/plugin/component_keyring_encrypted_file.cnf
+        state: absent
+
+    - name: Remove manifest file mysqld.my
+      ansible.builtin.file:
+        path: /usr/sbin/mysqld.my
+        state: absent
+
+    # =========================================================================
+    # UNDO STEP 8 — Disable jemalloc (remove LD_PRELOAD line)
+    # =========================================================================
+    - name: Remove jemalloc LD_PRELOAD from /etc/sysconfig/mysql
+      ansible.builtin.lineinfile:
+        path: /etc/sysconfig/mysql
+        regexp: '^LD_PRELOAD='
+        state: absent
+      notify: daemon-reload
+
+    # =========================================================================
+    # UNDO STEP 7 — Remove mysqld.service resource limits
+    # =========================================================================
+    - name: Remove mysqld.service resource limits
+      ansible.builtin.lineinfile:
+        path: /lib/systemd/system/mysqld.service
+        line: "{{ item }}"
+        state: absent
+      loop:
+        - "LimitAS=infinity"
+        - "LimitRSS=infinity"
+        - "LimitCORE=infinity"
+        - "LimitNOFILE=1024000"
+        - "LimitMEMLOCK=infinity"
+      notify: daemon-reload
+
+    # =========================================================================
+    # UNDO STEP 6 — Remove sudoers, mysql user and group (NOT the base dir)
+    # =========================================================================
+    - name: Remove sudoers file for mysql
+      ansible.builtin.file:
+        path: /etc/sudoers.d/mysql
+        state: absent
+
+    - name: Remove mysql user
+      ansible.builtin.user:
+        name: mysql
+        state: absent
+        remove: false          # do NOT remove home dir contents forcibly
+      ignore_errors: true
+
+    - name: Remove mysql group
+      ansible.builtin.group:
+        name: mysql
+        state: absent
+      ignore_errors: true
+
+    # =========================================================================
+    # UNDO STEP 5 — SELinux and firewalld undo intentionally SKIPPED
+    # =========================================================================
+
+    # =========================================================================
+    # UNDO STEP 4 — Remove transparent_hugepage=never from GRUB cmdline
+    # =========================================================================
+    - name: Remove transparent_hugepage=never from GRUB cmdline
+      ansible.builtin.replace:
+        path: /etc/default/grub
+        regexp: '\s*transparent_hugepage=never'
+        replace: ''
+      notify: regenerate grub
+
+    # =========================================================================
+    # UNDO STEP 3 — Remove mysql security limits
+    # =========================================================================
+    - name: Remove security limits for mysql
+      ansible.builtin.lineinfile:
+        path: /etc/security/limits.conf
+        line: "{{ item }}"
+        state: absent
+      loop:
+        - "mysql soft nofile 1024000"
+        - "mysql hard nofile 1024000"
+        - "mysql soft nproc 10240"
+        - "mysql hard nproc 10240"
+        - "mysql soft memlock unlimited"
+        - "mysql hard memlock unlimited"
+
+    # =========================================================================
+    # UNDO STEP 2 — Reset swappiness (remove the vm.swappiness=1 setting)
+    # =========================================================================
+    - name: Remove vm.swappiness=1 from /etc/sysctl.conf
+      ansible.builtin.lineinfile:
+        path: /etc/sysctl.conf
+        regexp: '^vm\.swappiness\s*=\s*1$'
+        state: absent
+
+    - name: Reload sysctl
+      ansible.builtin.command: sysctl -p
+      changed_when: false
+
+    # =========================================================================
+    # NOTE: /opt/mysql base directory is intentionally NOT removed.
+    # =========================================================================
+    - name: Confirm base directory is preserved
+      ansible.builtin.debug:
+        msg: "MySQL base directory /opt/mysql is intentionally left in place."
+
