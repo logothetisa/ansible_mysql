@@ -41,30 +41,16 @@
         group: mysql
         mode: "0600"
 
-    # ---------- PRESENT: uncomment, then add/update ----------
-    - name: "PRESENT - uncomment if commented"
+    # ---------- ENABLED: uncomment ----------
+    - name: "ENABLED - uncomment if commented - it does NOT change values"
       ansible.builtin.replace:
         path: "{{ mysql_cnf_path }}"
         regexp: '^(\s*)#\s*({{ item.name | regex_escape }}\s*=.*)$'
         replace: '\1\2'
       loop: "{{ mysql_params | selectattr('state','undefined') | list
-                + mysql_params | selectattr('state','defined') | selectattr('state', 'match', 'present') | list }}"
+                + mysql_params | selectattr('state','defined') | selectattr('state', 'match', 'enabled') | list }}"
       loop_control:
         label: "{{ item.name }}"
-
-    - name: "PRESENT - add or update (after [mysqld])"
-      ansible.builtin.lineinfile:
-        path: "{{ mysql_cnf_path }}"
-        regexp: '^\s*{{ item.name | regex_escape }}\s*=.*$'
-        line: "{{ item.name }}={{ item.value }}"
-        insertafter: '^\[{{ mysql_section }}\]'
-        owner: mysql
-        group: mysql
-        mode: "0600"
-      loop: "{{ mysql_params | selectattr('state','undefined') | list
-                + mysql_params | selectattr('state','defined') | selectattr('state','match','present') | list }}"
-      loop_control:
-        label: "{{ item.name }} = {{ item.value | default('') }}"
 
     # ---------- DISABLED: comment out ----------
     - name: "DISABLED - comment out active line"
@@ -76,7 +62,22 @@
       loop_control:
         label: "{{ item.name }}"
 
-    # ---------- ABSENT: remove the line entirely  (THIS WAS MISSING) ----------
+    # ---------- PRESENT: add or if it exists but is commented out, uncomment and update it ----------
+    - name: "PRESENT - add or update (enable if commented, after [mysqld])"
+      ansible.builtin.lineinfile:
+        path: "{{ mysql_cnf_path }}"
+        regexp: '^\s*#?\s*{{ item.name | regex_escape }}\s*=.*$'
+        line: "{{ item.name }}={{ item.value }}"
+        insertafter: '^\[{{ mysql_section }}\]'
+        owner: mysql
+        group: mysql
+        mode: "0600"
+      loop: "{{ mysql_params | selectattr('state','undefined') | list
+                + mysql_params | selectattr('state','defined') | selectattr('state','match','present') | list }}"
+      loop_control:
+        label: "{{ item.name }} = {{ item.value | default('') }}"
+
+    # ---------- ABSENT: remove the line entirely ----------
     - name: "ABSENT - remove parameter line"
       ansible.builtin.lineinfile:
         path: "{{ mysql_cnf_path }}"

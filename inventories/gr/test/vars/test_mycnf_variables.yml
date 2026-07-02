@@ -1,7 +1,7 @@
 mysql_params:
   - name: new_var_02
     value: "200"
-    state: absent
+    state: disabled
   - name: mysql_native_password
     value: "ON"
     state: disabled
