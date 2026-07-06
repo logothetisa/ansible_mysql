@@ -1,0 +1,8 @@
+- name: Create keyring component config
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/../templates/{{ component_keyring_encrypted_file_cnf_template }}"
+    dest: "{{ keyring_component_path }}"
+    owner: root
+    group: mysql
+    mode: "0640"
+

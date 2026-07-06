@@ -91,5 +91,15 @@
           Restart mysqld manually during a controlled maintenance window
           for non-dynamic settings to take effect.
 
+#    - name: Verify effective user
+#      ansible.builtin.command: id
+#      become_user: mysql
+#      register: whoami
+#      changed_when: false
+
+#    - name: Show effective user
+#      ansible.builtin.debug:
+#        msg: "{{ whoami.stdout }}"
+
   # NO handlers block — mysqld is never restarted by this playbook.
 

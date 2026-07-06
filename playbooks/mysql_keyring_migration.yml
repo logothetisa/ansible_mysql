@@ -1,0 +1,177 @@
+---
+# MySQL Keyring Plugin to Component Migration Playbook
+# Migrates from keyring_encrypted_file plugin to component_keyring_encrypted_file
+
+- name: MySQL Keyring Migration - Plugin to Component
+  hosts: "{{ target }}"
+  become: true                 # escalate to root (default become_user) for all tasks
+  gather_facts: true
+
+
+  pre_tasks:
+  - name: Pre-flight checks for keyring plugin to component migration
+    block:
+      # ------------------------------------------------------------------
+      # 1) Ensure MySQL version is < 8.4
+      # ------------------------------------------------------------------
+#      - name: Get MySQL version from binary
+#        ansible.builtin.command: mysqld --version
+#        register: mysqld_version_raw
+#        changed_when: false
+
+#      - name: Extract MySQL version string
+#        ansible.builtin.set_fact:
+#          mysql_version: "{{ mysqld_version_raw.stdout | regex_search('[0-9]+\\.[0-9]+\\.[0-9]+') }}"
+
+#      - name: Assert MySQL version is less than 8.4
+#        ansible.builtin.assert:
+#          that:
+#            - mysql_version is version('8.4.0', '<')
+#          fail_msg: "MySQL {{ mysql_version }} — keyring plugin is removed in 8.4+. Aborting."
+#          success_msg: "MySQL {{ mysql_version }} is < 8.4 — OK."
+
+      # ------------------------------------------------------------------
+      # 2) Ensure mysqld systemd service is running
+      # ------------------------------------------------------------------
+#      - name: Gather service facts
+#        ansible.builtin.service_facts:
+
+#      - name: Assert mysqld service is running
+#        ansible.builtin.assert:
+#          that:
+#            - "'mysqld.service' in ansible_facts.services"
+#            - ansible_facts.services['mysqld.service'].state | default('') == 'running'
+#          fail_msg: "The mysqld systemd service is not running."
+#          success_msg: "mysqld service is running — OK."
+
+      # ------------------------------------------------------------------
+      # 3) Ensure a keyring plugin is enabled/active
+      # ------------------------------------------------------------------
+      - name: Check /etc/my.cnf for early-plugin-load keyring entry
+        ansible.builtin.slurp:
+          src: /etc/my.cnf
+        register: my_cnf_content
+
+      - name: Assert keyring plugin is enabled in my.cnf
+        ansible.builtin.assert:
+          that:
+            - (my_cnf_content.content | b64decode) is search('early[-_]plugin[-_]load\s*=.*keyring')
+          fail_msg: "No keyring plugin found in /etc/my.cnf — nothing to migrate."
+          success_msg: "Keyring plugin configured in /etc/my.cnf — OK."
+                  
+  tasks:
+
+    # -------------------------------------------------------------------------
+    # Stop MySQL
+    # -------------------------------------------------------------------------
+    - name: Stopping mysqld service
+      ansible.builtin.systemd:
+        name: mysqld
+        state: stopped
+      register: stop_result
+
+    - name: Confirm mysqld is stopped
+      ansible.builtin.debug:
+        msg: "mysqld service stopped successfully"
+      when: stop_result is succeeded
+
+    # -------------------------------------------------------------------------
+    # Create keyring component configuration file
+    # -------------------------------------------------------------------------
+    - name: Create keyring component configuration file "component_keyring_encrypted_file.cnf"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/keyring_component_config_file_task.yml"
+
+    # -------------------------------------------------------------------------
+    # Create temporary migration my.cnf
+    # -------------------------------------------------------------------------
+    - name: Create keyring_migration.cnf
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/{{ component_keyring_migration_cnf_template }}"
+        dest: "/tmp/keyring_migration.cnf"
+        owner: mysql
+        group: mysql
+        mode: '0600'
+        
+    # -------------------------------------------------------------------------
+    # Execute the keyring migration command
+    # -------------------------------------------------------------------------
+    - name: Execute keyring migration from plugin to component
+      ansible.builtin.command:
+        cmd: >
+          mysqld
+          --defaults-file={{ keyring_migration_cnf }}
+          --keyring-migration-to-component
+          --keyring-migration-source=keyring_encrypted_file.so
+          --keyring-migration-destination=component_keyring_encrypted_file.so
+      register: migration_result
+      failed_when: migration_result.rc != 0
+
+    - name: Step 5 - Show migration output
+      ansible.builtin.debug:
+        var: migration_result.stdout_lines
+      when: migration_result.stdout_lines is defined
+
+    - name: Step 5 - Clean up temporary migration cnf
+      ansible.builtin.file:
+        path: "/tmp/keyring_migration.cnf"
+        state: absent
+
+    # -------------------------------------------------------------------------
+    # Create the manifest file
+    # -------------------------------------------------------------------------
+    - name: Create keyring component manifest file "mysqld.my"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/keyring_component_manifest_file_task.yml"
+    
+    # -------------------------------------------------------------------------
+    # Remove/comment out old keyring plugin settings from /etc/my.cnf
+    # -------------------------------------------------------------------------
+    - name: Back up /etc/my.cnf before modification
+      ansible.builtin.copy:
+        src: "{{ mysql_cnf_path }}"
+        dest: "{{ mysql_cnf_path }}.bak"
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Comment out early_plugin-load=keyring_encrypted_file.so
+      ansible.builtin.replace:
+        path: "{{ mysql_cnf_path }}"
+        regexp: '^(\s*early_plugin-load\s*=\s*keyring_encrypted_file\.so.*)$'
+        replace: '# \1'
+
+    - name: Comment out keyring_encrypted_file_data
+      ansible.builtin.replace:
+        path: "{{ mysql_cnf_path }}"
+        regexp: '^(\s*keyring_encrypted_file_data\s*=.*)$'
+        replace: '# \1'
+
+    - name: Comment out keyring_encrypted_file_password
+      ansible.builtin.replace:
+        path: "{{ mysql_cnf_path }}"
+        regexp: '^(\s*keyring_encrypted_file_password\s*=.*)$'
+        replace: '# \1'
+
+    # -------------------------------------------------------------------------
+    # Start MySQL
+    # -------------------------------------------------------------------------
+    - name: tart mysqld service
+      ansible.builtin.systemd:
+        name: mysqld
+        state: started
+      register: start_result
+
+    - name: SConfirm mysqld started successfully
+      ansible.builtin.debug:
+        msg: "mysqld service started successfully"
+      when: start_result is succeeded
+
+    - name: Verify mysqld is running
+      ansible.builtin.systemd:
+        name: mysqld
+      register: mysqld_status
+
+    - name: Display mysqld service status
+      ansible.builtin.debug:
+        msg: "mysqld is {{ mysqld_status.status.ActiveState }}"
+

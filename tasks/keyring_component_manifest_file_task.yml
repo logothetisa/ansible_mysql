@@ -1,0 +1,8 @@
+- name: Create jeyring component config
+  ansible.builtin.template:
+   src: "{{ playbook_dir }}/../templates/{{ component_keyring_manifest_file_template }}"
+   dest: "{{ keyring_manifest_path }}"
+   owner: root
+   group: mysql
+   mode: "0640"
+

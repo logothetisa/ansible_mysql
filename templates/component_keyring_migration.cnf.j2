@@ -1,0 +1,7 @@
+[mysqld]
+user = {{ mysql_user }}
+port = {{ mysql_port }}
+early_plugin-load=keyring_encrypted_file.so
+keyring_encrypted_file_data={{ keyring_old_data_path }}
+keyring_encrypted_file_password={{ keyring_password }}
+

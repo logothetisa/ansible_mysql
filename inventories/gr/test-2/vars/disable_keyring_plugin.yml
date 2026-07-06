@@ -1,0 +1,12 @@
+---
+mysql_params:
+  - name: early_plugin-load
+    value: ""
+    state: disabled
+  - name: keyring_encrypted_file_data
+    value: ""
+    state: disabled
+  - name: keyring_encrypted_file_password
+    value: ""          
+    state: disabled
+

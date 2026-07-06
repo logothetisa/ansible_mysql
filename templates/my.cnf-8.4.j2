@@ -88,8 +88,8 @@ innodb_log_group_home_dir       = {{ innodb_log_group_home_dir | mandatory }}
 # General Configuration
 #
 #----------------------------------------------------------------------
-user = mysql
-port = 3306
+user = {{ mysql_user }}
+port = {{ mysql_port }}
 gtid_mode = ON
 enforce_gtid_consistency = ON
 
