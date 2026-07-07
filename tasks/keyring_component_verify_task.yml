@@ -1,0 +1,43 @@
+---
+# Verify the TDE keyring component is loaded and Active.
+# Runs the mysql CLI on the DB host (over the existing SSH connection).
+
+- name: "Verify | Query Component_status via mysql CLI"
+  ansible.builtin.command:
+    argv:
+      - mysql
+      - "--user={{ vault_mysql_user }}"
+      - "--batch"
+      - "--skip-column-names"
+      - "--execute=SELECT STATUS_VALUE FROM performance_schema.keyring_component_status WHERE STATUS_KEY = 'Component_status';"
+  environment:
+    MYSQL_PWD: "{{ vault_mysql_password }}"   # avoids password-on-CLI warning
+  register: keyring_status
+  changed_when: false
+#  no_log: true
+
+- name: "Verify | Assert the keyring component is Active"
+  ansible.builtin.assert:
+    that:
+      - keyring_status.stdout | trim == 'Active'
+    success_msg: "TDE keyring component is loaded and Active."
+    fail_msg: >-
+      TDE keyring component is NOT Active.
+      Current value: "{{ keyring_status.stdout | trim | default('NO ROWS RETURNED (component not loaded)', true) }}"
+
+- name: "Verify | Dump full keyring_component_status (audit)"
+  ansible.builtin.command:
+    argv:
+      - mysql
+      - "--user={{ vault_mysql_user }}"
+      - "--table"
+      - "--execute=SELECT * FROM performance_schema.keyring_component_status;"
+  environment:
+    MYSQL_PWD: "{{ vault_mysql_password }}"
+  register: keyring_full
+  changed_when: false
+#  no_log: true
+
+- name: "Verify | Show keyring status table"
+  ansible.builtin.debug:
+    msg: "{{ keyring_full.stdout_lines }}"

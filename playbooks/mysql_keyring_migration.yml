@@ -161,7 +161,7 @@
         state: started
       register: start_result
 
-    - name: SConfirm mysqld started successfully
+    - name: Confirm mysqld started successfully
       ansible.builtin.debug:
         msg: "mysqld service started successfully"
       when: start_result is succeeded
@@ -175,3 +175,8 @@
       ansible.builtin.debug:
         msg: "mysqld is {{ mysqld_status.status.ActiveState }}"
 
+    # -------------------------------------------------------------------------
+    # Verify keyring component is Active
+    # -------------------------------------------------------------------------
+    - name: Verify TDE keyring component is loaded and Active
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/keyring_component_verify_task.yml"
