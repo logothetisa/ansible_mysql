@@ -11,7 +11,9 @@
   pre_tasks:
   - name: Pre-flight checks for keyring plugin to component migration
     block:
-
+      - name: Verify my.cnf exists and back it up before modification
+        ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/backup_mycnf_task.yml"
+        
       # ------------------------------------------------------------------
       # 3) Ensure a keyring plugin is enabled/active
       # ------------------------------------------------------------------
@@ -26,7 +28,7 @@
             - (my_cnf_content.content | b64decode) is search('early[-_]plugin[-_]load\s*=.*keyring')
           fail_msg: "No keyring plugin found in /etc/my.cnf — nothing to migrate."
           success_msg: "Keyring plugin configured in /etc/my.cnf — OK."
-                  
+
   tasks:
 
     # -------------------------------------------------------------------------

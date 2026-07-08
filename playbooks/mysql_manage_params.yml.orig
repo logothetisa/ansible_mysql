@@ -12,9 +12,34 @@
           - mysql_params | length > 0
         fail_msg: "No parameters supplied. Pass -e @vars/...yml"
 
+    - name: Check that my.cnf exists
+      ansible.builtin.stat:
+        path: "{{ mysql_cnf_path }}"
+      register: mycnf_stat
+
+    - name: Fail if my.cnf is missing
+      ansible.builtin.fail:
+        msg: "{{ mysql_cnf_path }} does not exist."
+      when: not mycnf_stat.stat.exists
+
   tasks:
-    - name: Verify my.cnf exists and back it up before modification
-      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/backup_mycnf_task.yml"
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ mysql_cnf_backup_dir }}"
+        state: directory
+        owner: mysql
+        group: mysql
+        mode: "0700"
+      check_mode: false
+
+    - name: Backup current my.cnf before modification
+      ansible.builtin.copy:
+        src: "{{ mysql_cnf_path }}"
+        dest: "{{ mysql_cnf_backup_dir }}/my.cnf.{{ ansible_date_time.iso8601_basic_short }}.bak"
+        remote_src: true
+        owner: mysql
+        group: mysql
+        mode: "0600"
 
     # ---------- ENABLED: uncomment ----------
     - name: "ENABLED - uncomment if commented - it does NOT change values"

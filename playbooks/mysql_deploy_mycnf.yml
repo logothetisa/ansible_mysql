@@ -6,5 +6,8 @@
   roles:
     - common           # if the task file notifies handlers like 'restart mysqld'
   tasks:
+    - name: Verify my.cnf exists and back it up before modification
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/backup_mycnf_task.yml"
+      
     - name: Include my.cnf deployment tasks
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/deploy_mycnf_tasks.yml"

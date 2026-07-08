@@ -168,5 +168,8 @@
     - name: Create keyring component config file -> "component_keyring_encrypted_file.cnf"
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/keyring_component_config_file_task.yml"
 
+    # =========================================================================
+    # STEP 10 — Deploy new my.cnf
+    # =========================================================================
     - name: Deploy new my.cnf
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/deploy_mycnf_tasks.yml"

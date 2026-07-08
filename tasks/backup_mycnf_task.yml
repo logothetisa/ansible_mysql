@@ -1,0 +1,36 @@
+---
+# -------------------------------------------------------------------------
+# Verify my.cnf exists, then back it up before modification.
+# -------------------------------------------------------------------------
+- name: Check that my.cnf exists
+  ansible.builtin.stat:
+    path: "{{ mysql_cnf_path }}"
+  register: mycnf_stat
+
+- name: Fail if my.cnf is missing
+  ansible.builtin.fail:
+    msg: "{{ mysql_cnf_path }} does not exist."
+  when: not mycnf_stat.stat.exists
+
+- name: Ensure backup directory exists
+  ansible.builtin.file:
+    path: "{{ mysql_cnf_backup_dir }}"
+    state: directory
+    owner: mysql
+    group: mysql
+    mode: "0700"
+  check_mode: false
+
+- name: Backup current my.cnf before modification
+  ansible.builtin.copy:
+    src: "{{ mysql_cnf_path }}"
+    dest: "{{ mysql_cnf_backup_dir }}/my.cnf.{{ ansible_date_time.iso8601_basic_short }}.bak"
+    remote_src: true
+    owner: mysql
+    group: mysql
+    mode: "0600"
+    
+- name: Show backup location
+  ansible.builtin.debug:
+    msg: "Existing my.cnf backed up at {{ mysql_cnf_backup_dir }}"
+  when: mycnf_stat.stat.exists
