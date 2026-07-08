@@ -1,0 +1,13 @@
+# -------------------------------------------------------------------------
+# Stop MySQL
+# -------------------------------------------------------------------------
+- name: Stopping mysqld service
+  ansible.builtin.systemd:
+    name: mysqld
+    state: stopped
+  register: stop_result
+
+- name: Confirm mysqld is stopped
+  ansible.builtin.debug:
+    msg: "mysqld service stopped successfully"
+  when: stop_result is succeeded

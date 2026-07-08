@@ -11,38 +11,6 @@
   pre_tasks:
   - name: Pre-flight checks for keyring plugin to component migration
     block:
-      # ------------------------------------------------------------------
-      # 1) Ensure MySQL version is < 8.4
-      # ------------------------------------------------------------------
-#      - name: Get MySQL version from binary
-#        ansible.builtin.command: mysqld --version
-#        register: mysqld_version_raw
-#        changed_when: false
-
-#      - name: Extract MySQL version string
-#        ansible.builtin.set_fact:
-#          mysql_version: "{{ mysqld_version_raw.stdout | regex_search('[0-9]+\\.[0-9]+\\.[0-9]+') }}"
-
-#      - name: Assert MySQL version is less than 8.4
-#        ansible.builtin.assert:
-#          that:
-#            - mysql_version is version('8.4.0', '<')
-#          fail_msg: "MySQL {{ mysql_version }} — keyring plugin is removed in 8.4+. Aborting."
-#          success_msg: "MySQL {{ mysql_version }} is < 8.4 — OK."
-
-      # ------------------------------------------------------------------
-      # 2) Ensure mysqld systemd service is running
-      # ------------------------------------------------------------------
-#      - name: Gather service facts
-#        ansible.builtin.service_facts:
-
-#      - name: Assert mysqld service is running
-#        ansible.builtin.assert:
-#          that:
-#            - "'mysqld.service' in ansible_facts.services"
-#            - ansible_facts.services['mysqld.service'].state | default('') == 'running'
-#          fail_msg: "The mysqld systemd service is not running."
-#          success_msg: "mysqld service is running — OK."
 
       # ------------------------------------------------------------------
       # 3) Ensure a keyring plugin is enabled/active
@@ -64,16 +32,8 @@
     # -------------------------------------------------------------------------
     # Stop MySQL
     # -------------------------------------------------------------------------
-    - name: Stopping mysqld service
-      ansible.builtin.systemd:
-        name: mysqld
-        state: stopped
-      register: stop_result
-
-    - name: Confirm mysqld is stopped
-      ansible.builtin.debug:
-        msg: "mysqld service stopped successfully"
-      when: stop_result is succeeded
+    - name: Stop mysqld service
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/stop_mysqld_service_task.yml"
 
     # -------------------------------------------------------------------------
     # Create keyring component configuration file
@@ -155,25 +115,8 @@
     # -------------------------------------------------------------------------
     # Start MySQL
     # -------------------------------------------------------------------------
-    - name: tart mysqld service
-      ansible.builtin.systemd:
-        name: mysqld
-        state: started
-      register: start_result
-
-    - name: Confirm mysqld started successfully
-      ansible.builtin.debug:
-        msg: "mysqld service started successfully"
-      when: start_result is succeeded
-
-    - name: Verify mysqld is running
-      ansible.builtin.systemd:
-        name: mysqld
-      register: mysqld_status
-
-    - name: Display mysqld service status
-      ansible.builtin.debug:
-        msg: "mysqld is {{ mysqld_status.status.ActiveState }}"
+    - name: Start mysqld service
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/start_mysqld_service_task.yml"
 
     # -------------------------------------------------------------------------
     # Verify keyring component is Active
