@@ -1,0 +1,15 @@
+---
+mysql_params:
+  - name: performance_schema
+    value: "ON"
+    state: disabled
+  - name: performance-schema-instrument
+    value: "'statement/%=ON'"
+    state: disabled
+  - name: performance-schema-consumer-statements-digest
+    value: "ON" 
+    state: disabled
+  - name: innodb_monitor_enable
+    value: "all"
+    state: disabled
+

@@ -1,0 +1,21 @@
+---
+mysql_params:
+  - name: plugin_load-add
+    value: "thread_pool.so"
+    state: present
+  - name: plugin_dir
+    value: "/usr/lib64/mysql/plugin/"
+    state: present
+  - name: plugin_load
+    value: "thread_pool.so"
+    state: present
+  - name: thread_pool_size
+    value: "36"
+    state: present
+  - name: thread_pool_high_priority_connection
+    value: "1"
+    state: present
+  - name: thread_pool_stall_limit
+    value: "10"
+    state: present
+
