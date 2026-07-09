@@ -58,75 +58,62 @@
     #  so we bootstrap via the local socket with an empty password first)
     # =========================================================================
     - name: Ensure global read_only is off for bootstrap
-      ansible.builtin.command:
-        argv:
-          - mysql
-#          - "--socket={{ mysql_socket }}"
-          - "--user=root"
-          - "--execute=SET @@global.read_only = 0"
-      environment:
-        MYSQL_PWD: ""            # fresh --initialize-insecure -> empty root password
+      community.mysql.mysql_query:
+        login_user: root
+        login_password: ""
+        login_unix_socket: "{{ mysql_socket }}"
+        query: "SET @@global.read_only = 0"
       changed_when: false
 
     - name: Create root@'%' and grant privileges
-      ansible.builtin.command:
-        argv:
-          - mysql
-#          - "--socket={{ mysql_socket }}"
-          - "--user=root"
-          - >-
-            --execute=CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED BY '{{ vault_mysql_password }}';
-            GRANT ALL ON *.* TO 'root'@'%' WITH GRANT OPTION;
-            GRANT PROXY ON ''@'' TO 'root'@'%' WITH GRANT OPTION;
-      environment:
-        MYSQL_PWD: ""
-      register: create_root_user
-      changed_when: create_root_user.rc == 0
+      community.mysql.mysql_query:
+        login_user: root
+        login_password: ""
+        login_unix_socket: "{{ mysql_socket }}"
+        query:
+          - "CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED BY '{{ vault_mysql_root_password }}'"
+          - "GRANT ALL ON *.* TO 'root'@'%' WITH GRANT OPTION"
+          - "GRANT PROXY ON ''@'' TO 'root'@'%' WITH GRANT OPTION"
       no_log: true
 
     - name: Drop the insecure root@'localhost' account
-      ansible.builtin.command:
-        argv:
-          - mysql
-#          - "--socket={{ mysql_socket }}"
-          - "--user=root"
-          - "--execute=DROP USER IF EXISTS 'root'@'localhost'"
-      environment:
-        MYSQL_PWD: "{{ vault_mysql_password }}"
-      register: drop_root_localhost
-      changed_when: drop_root_localhost.rc == 0
+      community.mysql.mysql_query:
+        login_user: root
+        login_password: "{{ vault_mysql_root_password }}"
+        login_unix_socket: "{{ mysql_socket }}"
+        query: "DROP USER IF EXISTS 'root'@'localhost'"
       no_log: true
 
     # =========================================================================
     # STEP 3 — Install clone plugin and audit plugin (+ source audit SQL)
     # =========================================================================
     - name: Install clone plugin
-      ansible.builtin.command:
-        argv:
-          - mysql
-          - "--user={{ vault_mysql_user }}"
-          - "--execute=INSTALL PLUGIN clone SONAME 'mysql_clone.so'"
-      environment:
-        MYSQL_PWD: "{{ vault_mysql_password }}"
+      community.mysql.mysql_query:
+        login_user: "{{ vault_mysql_user }}"
+        login_password: "{{ vault_mysql_password }}"
+        login_unix_socket: "{{ mysql_socket }}"
+        query: "INSTALL PLUGIN clone SONAME 'mysql_clone.so'"
       register: clone_plugin
       failed_when:
-        - clone_plugin.rc != 0
-        - "'already' not in (clone_plugin.stderr | default('') | lower)"
-      changed_when: clone_plugin.rc == 0
+        - clone_plugin.failed
+        - "'already' not in (clone_plugin.msg | default('')) | lower"
+      changed_when: not clone_plugin.failed
       no_log: true
 
-    - name: Install audit_log_filter via mysql CLI 'source'
-      ansible.builtin.command:
-        argv:
-          - mysql
-          - "--user={{ vault_mysql_user }}"
-          - "--execute=source {{ audit_log_filter_path }}"
+    - name: Check the audit_log install SQL script exists
+      ansible.builtin.stat:
+        path: "{{ mysql_audit_install_sql }}"
+      register: audit_sql_stat
+
+    - name: Source the audit_log_filter install SQL
+      ansible.builtin.shell:
+        cmd: "mysql --user={{ vault_mysql_user }} mysql < {{ mysql_audit_install_sql }}"
       environment:
         MYSQL_PWD: "{{ vault_mysql_password }}"
+      when: audit_sql_stat.stat.exists
       register: audit_source
       changed_when: audit_source.rc == 0
       no_log: true
-
 
     # =========================================================================
     # STEP 4 — Load the Time Zone tables
@@ -134,7 +121,7 @@
     - name: Load Time Zone tables from {{ mysql_zoneinfo_dir }}
       ansible.builtin.shell:
         cmd: >
-          mysql_tzinfo_to_sql {{ mysql_zoneinfo_path }}
+          mysql_tzinfo_to_sql {{ mysql_zoneinfo_dir }}
           | mysql --user={{ vault_mysql_user }} mysql
       environment:
         MYSQL_PWD: "{{ vault_mysql_password }}"
@@ -147,18 +134,16 @@
     # STEP 8 — Install password validation component
     # =========================================================================
     - name: Install validate_password component
-      ansible.builtin.command:
-        argv:
-          - mysql
-          - "--user={{ vault_mysql_user }}"
-          - "--execute=INSTALL COMPONENT 'file://component_validate_password'"
-      environment:
-        MYSQL_PWD: "{{ vault_mysql_password }}"
+      community.mysql.mysql_query:
+        login_user: "{{ vault_mysql_user }}"
+        login_password: "{{ vault_mysql_password }}"
+        login_unix_socket: "{{ mysql_socket }}"
+        query: "INSTALL COMPONENT 'file://component_validate_password'"
       register: validate_pw_component
       failed_when:
-        - validate_pw_component.rc != 0
-        - "'already exists' not in (validate_pw_component.stderr | default('') | lower)"
-      changed_when: validate_pw_component.rc == 0
+        - validate_pw_component.failed
+        - "'already exists' not in (validate_pw_component.msg | default(''))"
+      changed_when: not validate_pw_component.failed
       no_log: true
 
     # =========================================================================
@@ -178,8 +163,14 @@
     # =========================================================================
     # STEP 7 — Verification steps (kept as reusable task file)
     # =========================================================================
-   # - name: Verify plugins, components, keyring and jemalloc
-   #   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/mysql_verify_initialization_task.yml"
+    - name: Verify plugins, components, keyring and jemalloc
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/clone_plugin_verify_task.yml"
+
+    - name: Verify plugins, components, keyring and jemalloc
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/jemalloc_verify_task.yml"
+
+    - name: Verify plugins, components, keyring and jemalloc
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/validate_passwd_component_verify_task.yml"
 
   post_tasks:
     - name: Initialization complete

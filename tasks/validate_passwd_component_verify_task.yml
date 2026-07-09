@@ -1,0 +1,58 @@
+---
+# Verify the validate_password component is installed and configured.
+# Runs the mysql CLI on the DB host (over the existing SSH connection).
+
+- name: "Verify | Query mysql.component for validate_password component"
+  ansible.builtin.command:
+    argv:
+      - mysql
+      - "--user={{ vault_mysql_user }}"
+      - "--batch"
+      - "--skip-column-names"
+      - "--execute=SELECT COUNT(*) FROM mysql.component WHERE component_urn = 'file://component_validate_password';"
+  environment:
+    MYSQL_PWD: "{{ vault_mysql_password }}"   # avoids password-on-CLI warning
+  register: validate_password_component_count
+  changed_when: false
+#  no_log: true
+
+- name: "Verify | Assert validate_password component is installed"
+  ansible.builtin.assert:
+    that:
+      - validate_password_component_count.stdout | trim | int > 0
+    success_msg: "validate_password component is installed."
+    fail_msg: "validate_password component is NOT installed (not found in mysql.component)."
+
+#- name: "Verify | Dump full mysql.component table (audit)"
+#  ansible.builtin.command:
+#    argv:
+#      - mysql
+#      - "--user={{ vault_mysql_user }}"
+#      - "--table"
+#      - "--execute=SELECT * FROM mysql.component;"
+#  environment:
+#    MYSQL_PWD: "{{ vault_mysql_password }}"
+#  register: mysql_component_full
+#  changed_when: false
+#  no_log: true
+
+#- name: "Verify | Show mysql.component table"
+#  ansible.builtin.debug:
+#    msg: "{{ mysql_component_full.stdout_lines }}"
+#
+#- name: "Verify | Dump validate_password variables (audit)"
+#  ansible.builtin.command:
+#    argv:
+#      - mysql
+#      - "--user={{ vault_mysql_user }}"
+#      - "--table"
+#      - "--execute=SHOW VARIABLES LIKE 'validate%';"
+#  environment:
+#    MYSQL_PWD: "{{ vault_mysql_password }}"
+#  register: validate_password_vars
+#  changed_when: false
+##  no_log: true
+#
+#- name: "Verify | Show validate_password variables"
+#  ansible.builtin.debug:
+#    msg: "{{ validate_password_vars.stdout_lines }}"

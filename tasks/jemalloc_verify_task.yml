@@ -1,0 +1,25 @@
+---
+# Verify jemalloc is loaded and active for the mysqld process.
+# Runs lsof on the DB host (over the existing SSH connection).
+
+- name: "Verify | Check jemalloc is loaded via lsof"
+  ansible.builtin.shell:
+    cmd: "lsof 2>/dev/null | grep -i jemalloc"
+  register: jemalloc_check
+  changed_when: false
+  failed_when: false
+#  no_log: true
+
+- name: "Verify | Assert jemalloc is active"
+  ansible.builtin.assert:
+    that:
+      - jemalloc_check.stdout | trim | length > 0
+    success_msg: "jemalloc is loaded and active on {{ inventory_hostname }}."
+    fail_msg: >-
+      jemalloc does NOT appear to be loaded on {{ inventory_hostname }}.
+      Check /etc/sysconfig/mysql for the LD_PRELOAD entry and confirm
+      mysqld has been restarted since it was added.
+
+#- name: "Verify | Show jemalloc lsof output"
+#  ansible.builtin.debug:
+#    msg: "{{ jemalloc_check.stdout_lines }}"

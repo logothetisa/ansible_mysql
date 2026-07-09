@@ -1,0 +1,43 @@
+---
+# Verify the clone plugin is installed and ACTIVE.
+# Runs the mysql CLI on the DB host (over the existing SSH connection).
+
+- name: "Verify | Query clone plugin status via mysql CLI"
+  ansible.builtin.command:
+    argv:
+      - mysql
+      - "--user={{ vault_mysql_user }}"
+      - "--batch"
+      - "--skip-column-names"
+      - "--execute=SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'clone';"
+  environment:
+    MYSQL_PWD: "{{ vault_mysql_password }}"   # avoids password-on-CLI warning
+  register: clone_plugin_status
+  changed_when: false
+#  no_log: true
+
+- name: "Verify | Assert the clone plugin is ACTIVE"
+  ansible.builtin.assert:
+    that:
+      - clone_plugin_status.stdout | trim == 'ACTIVE'
+    success_msg: "clone plugin is installed and ACTIVE."
+    fail_msg: >-
+      clone plugin is NOT ACTIVE.
+      Current value: "{{ clone_plugin_status.stdout | trim | default('NO ROWS RETURNED (plugin not installed)', true) }}"
+
+#- name: "Verify | Dump full SHOW PLUGINS output (audit)"
+#  ansible.builtin.command:
+#    argv:
+#      - mysql
+#      - "--user={{ vault_mysql_user }}"
+#      - "--table"
+#      - "--execute=SHOW PLUGINS;"
+#  environment:
+#    MYSQL_PWD: "{{ vault_mysql_password }}"
+#  register: show_plugins_full
+#  changed_when: false
+##  no_log: true
+#
+#- name: "Verify | Show plugins table"
+#  ansible.builtin.debug:
+#    msg: "{{ show_plugins_full.stdout_lines }}"

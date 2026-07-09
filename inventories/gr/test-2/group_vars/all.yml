@@ -10,6 +10,9 @@ component_keyring_migration_cnf_template: "component_keyring_migration.cnf.j2"
 component_keyring_encrypted_file_cnf_template: "component_keyring_encrypted_file.cnf.j2"
 component_keyring_manifest_file_template: "mysqld.my.j2"
 
+audit_log_filter_path: "/usr/share/mysql-8.4/audit_log_filter_linux_install.sql"
+mysql_zoneinfo_path: "/usr/share/zoneinfo"
+
 mysql_port: 3306
 mysql_user: mysql
 mysql_group: mysql
