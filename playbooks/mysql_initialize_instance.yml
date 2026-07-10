@@ -28,6 +28,32 @@
 
   tasks:
     # =========================================================================
+    # STEP 0 — Pre-flight: refuse to run against an already-initialized instance
+    # =========================================================================
+    - name: Check whether mysqld service is currently active
+      ansible.builtin.systemd:
+        name: mysqld
+      register: mysqld_service_state
+      failed_when: false
+
+    - name: Check whether the datadir already contains data
+      ansible.builtin.stat:
+        path: "{{ innodb_log_group_home_dir }}/mysql"
+      register: mysql_datadir_state
+
+    - name: Abort if mysqld is running or the datadir is not empty
+      ansible.builtin.assert:
+        that:
+          - (mysqld_service_state.status.ActiveState | default('inactive')) != 'active'
+          - not mysql_datadir_state.stat.exists
+        fail_msg: >-
+          Refusing to run: mysqld ActiveState="{{ mysqld_service_state.status.ActiveState | default('unknown') }}",
+          datadir "{{ innodb_log_group_home_dir }}/mysql" exists={{ mysql_datadir_state.stat.exists }}.
+          This playbook only initializes a fresh, empty instance — stop mysqld and clear the datadir first if a
+          re-initialization is genuinely intended.
+        success_msg: "Pre-flight checks passed: mysqld is not active and the datadir is empty."
+
+    # =========================================================================
     # STEP 1 — Initialize empty datadir (insecure), then start mysqld
     # =========================================================================
     - name: Check whether the datadir already contains data
@@ -82,7 +108,7 @@
         MYSQL_PWD: ""
       register: create_root_user
       changed_when: create_root_user.rc == 0
-      no_log: true
+      no_log: false
 
     - name: Drop the insecure root@'localhost' account
       ansible.builtin.command:
@@ -92,13 +118,13 @@
           - "--user=root"
           - "--execute=DROP USER IF EXISTS 'root'@'localhost'"
       environment:
-        MYSQL_PWD: "{{ vault_mysql_password }}"
+        MYSQL_PWD: ""
       register: drop_root_localhost
       changed_when: drop_root_localhost.rc == 0
-      no_log: true
+      no_log: false
 
     # =========================================================================
-    # STEP 3 — Install clone plugin and audit plugin (+ source audit SQL)
+    # STEP 3 — Install clone plugin
     # =========================================================================
     - name: Install clone plugin
       ansible.builtin.command:
@@ -113,23 +139,27 @@
         - clone_plugin.rc != 0
         - "'already' not in (clone_plugin.stderr | default('') | lower)"
       changed_when: clone_plugin.rc == 0
-      no_log: true
+      no_log: false
 
+    # =========================================================================
+    # STEP 4 — Install enterprise audit plugin
+    # =========================================================================
     - name: Install audit_log_filter via mysql CLI 'source'
       ansible.builtin.command:
         argv:
           - mysql
           - "--user={{ vault_mysql_user }}"
           - "--execute=source {{ audit_log_filter_path }}"
+          - "mysql"
       environment:
         MYSQL_PWD: "{{ vault_mysql_password }}"
       register: audit_source
       changed_when: audit_source.rc == 0
-      no_log: true
+      no_log: false
 
 
     # =========================================================================
-    # STEP 4 — Load the Time Zone tables
+    # STEP 5 — Load the Time Zone tables
     # =========================================================================
     - name: Load Time Zone tables from {{ mysql_zoneinfo_dir }}
       ansible.builtin.shell:
@@ -141,10 +171,10 @@
       register: tzload
       changed_when: tzload.rc == 0
       failed_when: tzload.rc != 0
-      no_log: true
+      no_log: false
 
     # =========================================================================
-    # STEP 8 — Install password validation component
+    # STEP 6 — Install password validation component
     # =========================================================================
     - name: Install validate_password component
       ansible.builtin.command:
@@ -159,24 +189,24 @@
         - validate_pw_component.rc != 0
         - "'already exists' not in (validate_pw_component.stderr | default('') | lower)"
       changed_when: validate_pw_component.rc == 0
-      no_log: true
+      no_log: false
 
     # =========================================================================
-    # STEP 9 — Enable MySQL Shell history persistence
+    # STEP 7 — Enable MySQL Shell history persistence
     # =========================================================================
     - name: Enable MySQL Shell history autosave
       ansible.builtin.command:
-        cmd: >
-          mysqlsh {{ vault_mysql_user }}@{{ ansible_hostname }}
+        cmd: >-
+          mysqlsh {{ vault_mysql_user }}@{{ ansible_hostname }} --js
           --password={{ vault_mysql_password }}
-          --execute="\option --persist history.autoSave=1"
+          --execute="shell.options.setPersist('history.autoSave', true)"
       register: mysqlsh_history
       changed_when: mysqlsh_history.rc == 0
       failed_when: mysqlsh_history.rc != 0
-      no_log: true
+      no_log: false
 
     # =========================================================================
-    # STEP 7 — Verification steps (kept as reusable task file)
+    # STEP 8 — Verification steps (kept as reusable task file)
     # =========================================================================
    # - name: Verify plugins, components, keyring and jemalloc
    #   ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/mysql_verify_initialization_task.yml"

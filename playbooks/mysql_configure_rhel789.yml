@@ -104,9 +104,18 @@
         name: "{{ mysql_user }}"
         group: "{{ mysql_group }}"
         home: "{{ mysql_home }}"
+        shell: /bin/bash
         create_home: true
         password: "{{ 'mysql' | password_hash('sha512') }}"
         update_password: on_create     # ← only sets password when user is first created
+
+    - name: Enforce ownership on mysql user home directory
+      ansible.builtin.file:
+        path: "{{ mysql_home }}"
+        state: directory
+        owner: "{{ mysql_user }}"
+        group: "{{ mysql_group }}"
+        recurse: true
 
     - name: Create MySQL directory structure
       ansible.builtin.file:
